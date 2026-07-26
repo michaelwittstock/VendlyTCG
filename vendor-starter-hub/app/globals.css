@@ -1,0 +1,130 @@
+@import url("https://fonts.googleapis.com/css2?family=Anton&family=Instrument+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap");
+@import "tailwindcss";
+
+/*
+  Dark-first theming.
+  "paper" = the surface, "ink" = what's written on it, "onaccent" = text sitting on orange.
+  Light mode overrides these same variables below — no component changes needed.
+*/
+@theme {
+  --color-paper: #141413;
+  --color-card: #1f1e1d;
+  --color-ink: #f5f4ef;
+  --color-dim: #a3a29c;
+  --color-line: #302f2c;
+  --color-sticker: #d9764f;
+  --color-onaccent: #14110f;
+  --color-chip: #2a2926;
+  --font-display: "Anton", "Arial Narrow", sans-serif;
+  --font-sans: "Instrument Sans", system-ui, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: dark light;
+  --chrome: linear-gradient(
+    100deg,
+    #ffffff 0%,
+    #9d9c96 20%,
+    #f4f3ee 42%,
+    #83827d 64%,
+    #ecebe5 86%,
+    #ffffff 100%
+  );
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-paper: #faf9f5;
+    --color-card: #ffffff;
+    --color-ink: #1a1917;
+    --color-dim: #5f5b55;
+    --color-line: #e5e2d9;
+    --color-sticker: #b8532c;
+    --color-onaccent: #faf9f5;
+    --color-chip: #eceae1;
+    --chrome: linear-gradient(
+      100deg,
+      #3a3835 0%,
+      #8a8781 18%,
+      #201f1d 40%,
+      #7e7b75 62%,
+      #2b2a27 84%,
+      #141312 100%
+    );
+  }
+}
+
+html,
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.display {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  line-height: 0.95;
+  letter-spacing: 0.01em;
+}
+
+/* Brushed-metal chromatic treatment — silver on dark, graphite on light */
+.chrome-text {
+  background: var(--chrome);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.chrome-bar {
+  background: var(--chrome);
+}
+
+.sticker {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--color-sticker);
+  color: var(--color-onaccent);
+  padding: 0.3rem 0.6rem 0.25rem;
+  border-radius: 3px;
+  transform: rotate(-2deg);
+}
+
+.sticker-muted {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--color-chip);
+  color: var(--color-dim);
+  padding: 0.3rem 0.6rem 0.25rem;
+  border-radius: 3px;
+  transform: rotate(-1deg);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid var(--color-sticker);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-sticker);
+  color: var(--color-onaccent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
