@@ -417,7 +417,15 @@ export default function FirstVendorTable() {
         ]}
       />
       <P>
-        A spreadsheet is enough to start. When it stops being enough, the{" "}
+        A spreadsheet is enough to start. Our free{" "}
+        <Link
+          href="/tools/inventory-template"
+          className="text-sticker underline underline-offset-4"
+        >
+          inventory + cost-basis template
+        </Link>{" "}
+        already has all four of those captured, with the cost basis pulled through to every sale
+        and a per-show P&amp;L on the back of it. When a spreadsheet stops being enough, the{" "}
         <Link href="/dashboard" className="text-sticker underline underline-offset-4">
           Vendly back office
         </Link>{" "}

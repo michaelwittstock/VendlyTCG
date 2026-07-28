@@ -8,7 +8,12 @@ export const metadata: Metadata = {
     "The starter playbook for first-time trading card vendors: inventory, pricing, booth setup, payments, cost basis, and the legal basics.",
 };
 
-const sections = [
+const sections: {
+  title: string;
+  body: string;
+  href?: string;
+  hrefLabel?: string;
+}[] = [
   {
     title: "Pick inventory that moves",
     body: "Your first table is not the place for trophy cards. Stock high-velocity singles in the $5–40 range and affordable sealed if your bankroll allows. Velocity beats prestige: ten $15 cards that sell beat one $150 card that doesn't.",
@@ -27,7 +32,9 @@ const sections = [
   },
   {
     title: "Track your cost basis",
-    body: "Profit is what's left after what you paid — not what you grossed. Log every buy and every sale. Our inventory template does this for you (join the list below to get it first).",
+    body: "Profit is what's left after what you paid — not what you grossed. Log every buy and every sale. Our free inventory + cost-basis template does it for you — cost basis, fees, and per-show profit in one spreadsheet.",
+    href: "/tools/inventory-template",
+    hrefLabel: "Get the template",
   },
   {
     title: "The legal bit (California)",
@@ -60,6 +67,14 @@ export default function StartHere() {
           <section key={s.title} className="rounded-lg border border-line bg-card p-6">
             <h2 className="display text-2xl">{s.title}</h2>
             <p className="mt-3 text-dim">{s.body}</p>
+            {s.href && (
+              <Link
+                href={s.href}
+                className="mt-4 inline-block font-mono text-xs font-bold uppercase tracking-wider text-sticker underline underline-offset-4"
+              >
+                {s.hrefLabel} →
+              </Link>
+            )}
           </section>
         ))}
       </div>
@@ -68,7 +83,8 @@ export default function StartHere() {
           Get the show-prep checklist
         </p>
         <p className="mt-2 text-sm text-dim">
-          The printable checklist and the free inventory template go out to the list first.
+          The inventory template is already free — the printable show-prep checklist goes out to
+          the list first.
         </p>
         <div className="mt-4">
           <EmailCapture cta="Send it to me" />
