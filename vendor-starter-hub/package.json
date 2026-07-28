@@ -4,7 +4,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test:unit": "npx --yes tsx@4 tests/unit.ts",
+    "test:live": "npx --yes tsx@4 tests/prices-live.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

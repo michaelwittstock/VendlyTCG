@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { isCardId } from "@/lib/prices";
+import { validateTarget, type WatchTarget } from "@/lib/watchlist";
 
 export type ActionState = { error?: string; ok?: boolean };
 
@@ -192,6 +194,93 @@ export async function deleteShow(id: string): Promise<ActionState> {
   const { supabase, user } = await authed();
   if (!user) return { error: "Not signed in." };
   const { error } = await supabase.from("shows").delete().eq("id", id);
+  if (error) return { error: error.message };
+  return done();
+}
+
+/* ---------------- watchlist ---------------- */
+
+export async function saveWatch(
+  _prev: ActionState,
+  f: FormData
+): Promise<ActionState> {
+  const { supabase, user } = await authed();
+  if (!user) return { error: "Not signed in." };
+
+  const cardId = str(f.get("card_id"));
+  const cardName = str(f.get("card_name"));
+  if (!cardId || !cardName) return { error: "Pick a card from the search first." };
+  // The id ends up inside an upstream query string. It arrives from a form,
+  // so it is user input regardless of where the form got it.
+  if (!isCardId(cardId)) return { error: "That card id does not look valid." };
+
+  const kind = String(f.get("target_kind") ?? "percent");
+  if (kind !== "price" && kind !== "percent")
+    return { error: "Pick either a dollar ceiling or a percentage." };
+
+  const target: WatchTarget = {
+    target_kind: kind,
+    target_price: kind === "price" ? num(f.get("target_price"), NaN) : null,
+    target_pct: kind === "percent" ? num(f.get("target_pct"), NaN) : null,
+  };
+  const bad = validateTarget(target);
+  if (bad) return { error: bad };
+
+  const marketAtAdd = str(f.get("market_at_add"));
+  const row = {
+    card_id: cardId,
+    card_name: cardName.slice(0, 200),
+    set_name: str(f.get("set_name")),
+    card_number: str(f.get("card_number")),
+    rarity: str(f.get("rarity")),
+    image_url: str(f.get("image_url")),
+    // "" from the select means "highest-value finish", which is NULL in the DB.
+    finish: str(f.get("finish")),
+    ...target,
+    notes: str(f.get("notes")),
+    active: f.get("active") === "off" ? false : true,
+  };
+
+  const id = str(f.get("id"));
+  if (id) {
+    const { error } = await supabase.from("watchlist").update(row).eq("id", id);
+    if (error) return { error: error.message };
+    return done();
+  }
+
+  // Re-adding a card you already watch should move the target, not create a
+  // second row that quietly disagrees with the first. The unique index is on
+  // (user_id, card_id, coalesce(finish,'')), so upsert has to name it.
+  const { error } = await supabase.from("watchlist").insert({
+    ...row,
+    market_at_add: marketAtAdd ? num(f.get("market_at_add")) : null,
+  });
+  if (error) {
+    if (error.code === "23505")
+      return { error: "You are already watching that card in that finish." };
+    return { error: error.message };
+  }
+  return done();
+}
+
+export async function deleteWatch(id: string): Promise<ActionState> {
+  const { supabase, user } = await authed();
+  if (!user) return { error: "Not signed in." };
+  const { error } = await supabase.from("watchlist").delete().eq("id", id);
+  if (error) return { error: error.message };
+  return done();
+}
+
+export async function setWatchActive(
+  id: string,
+  active: boolean
+): Promise<ActionState> {
+  const { supabase, user } = await authed();
+  if (!user) return { error: "Not signed in." };
+  const { error } = await supabase
+    .from("watchlist")
+    .update({ active })
+    .eq("id", id);
   if (error) return { error: error.message };
   return done();
 }
