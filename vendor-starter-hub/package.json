@@ -6,6 +6,9 @@
     "build": "next build",
     "start": "next start",
     "test:unit": "npx --yes tsx@4 tests/unit.ts",
+    "test:show": "npx --yes tsx@4 tests/showpack.ts",
+    "test:sw": "npx --yes tsx@4 tests/sw.ts",
+    "test:e2e": "npx --yes tsx@4 tests/show-e2e.ts",
     "test:live": "npx --yes tsx@4 tests/prices-live.ts"
   },
   "dependencies": {
