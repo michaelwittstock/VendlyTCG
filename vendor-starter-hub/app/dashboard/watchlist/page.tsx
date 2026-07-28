@@ -1,12 +1,34 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCardsByIds, pickFinish, referencePrice } from "@/lib/prices";
 import { status, drift } from "@/lib/watchlist";
+import {
+  trend,
+  groupHistory,
+  historyKey,
+  WINDOW_DAYS,
+} from "@/lib/price-history";
 import WatchlistClient, { type WatchRow } from "./watchlist-client";
 
 export const metadata = { title: "Watchlist" };
 // Prices are looked up per request (behind a 6h cache in lib/prices), so this
 // page cannot be statically rendered.
 export const dynamic = "force-dynamic";
+
+/**
+ * The snapshot job files each day under its Pacific date. The window has to be
+ * measured the same way or the oldest day would drop in and out of range
+ * depending on what time of day the page was opened.
+ */
+function pacificDay(offsetDays = 0): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
 
 export default async function WatchlistPage() {
   const supabase = await createClient();
@@ -16,11 +38,31 @@ export default async function WatchlistPage() {
     .order("created_at", { ascending: false });
 
   const watches = data ?? [];
+  const activeIds = watches.filter((w) => w.active).map((w) => w.card_id);
 
   // One upstream call per 20 cards, shared cache — never one call per row.
-  const { cards, stale, unresolved, degraded } = await getCardsByIds(
-    watches.filter((w) => w.active).map((w) => w.card_id),
-  );
+  const [{ cards, stale, unresolved, degraded }, historyRes, lastRunRes] =
+    await Promise.all([
+      getCardsByIds(activeIds),
+
+      // Recorded history for the cards on this page only. RLS limits this to
+      // cards the signed-in user watches, so the filter is belt-and-braces
+      // rather than the security boundary.
+      activeIds.length > 0
+        ? supabase
+            .from("price_history")
+            .select("card_id, finish, day, market, low")
+            .in("card_id", activeIds)
+            .gte("day", pacificDay(-WINDOW_DAYS))
+            .order("day", { ascending: true })
+        : Promise.resolve({ data: [] as never[] }),
+
+      // When the record was last brought up to date. The page says this out
+      // loud rather than letting a stalled job look like a flat market.
+      supabase.rpc("price_history_last_run").maybeSingle(),
+    ]);
+
+  const history = groupHistory(historyRes.data ?? []);
 
   const rows: WatchRow[] = watches.map((w) => {
     const card = cards.get(w.card_id);
@@ -32,6 +74,10 @@ export default async function WatchlistPage() {
       target_pct: w.target_pct === null ? null : Number(w.target_pct),
     };
     const atAdd = w.market_at_add === null ? null : Number(w.market_at_add);
+
+    // Keyed on the finish this watch is actually judged on, so a watch pinned
+    // to reverse holo can never be shown the holo card's trend line.
+    const points = finish ? (history.get(historyKey(w.card_id, finish.label)) ?? []) : [];
 
     return {
       id: w.id,
@@ -59,10 +105,15 @@ export default async function WatchlistPage() {
       stale: stale.has(w.card_id),
       status: status(target, market),
       drift: drift(market, atAdd),
+      trend: trend(points, market),
       tcgUrl: card?.url ?? null,
       pricedAt: card?.updatedAt ?? null,
     };
   });
 
-  return <WatchlistClient rows={rows} degraded={degraded} />;
+  const lastRun = (lastRunRes.data ?? null) as
+    | { finished_at: string; status: string; rows_written: number }
+    | null;
+
+  return <WatchlistClient rows={rows} degraded={degraded} lastRun={lastRun} />;
 }

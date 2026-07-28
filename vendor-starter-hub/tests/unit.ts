@@ -10,6 +10,9 @@ import {
   isCardId, chunk, pickFinish, referencePrice,
   type PriceCard,
 } from "../lib/prices";
+import {
+  trend, sparkPath, groupHistory, historyKey,
+} from "../lib/price-history";
 
 let pass = 0;
 const fails: string[] = [];
@@ -172,6 +175,68 @@ eq(referencePrice(null), null, "no finish -> no price");
   const bestPrice = referencePrice(pickFinish(c, null));
   eq(status(C(40), bestPrice).kind === "pay_up_to" && (status(C(40), bestPrice) as { ceiling: number }).ceiling,
     201.13, "same watch on the best finish is 201.13");
+}
+
+/* ---------------- price history / trend ---------------- */
+{
+  const pts = (...xs: [string, number][]) => xs.map(([day, price]) => ({ day, price }));
+
+  const empty = trend([], 50);
+  eq(empty.days, 0, "no recorded days -> zero days");
+  eq(empty.average, null, "no recorded days -> no average (not 0)");
+  eq(empty.vsAverage, null, "no recorded days -> nothing to compare against");
+
+  // Deliberately out of order and with a junk row: the job upserts by day, but
+  // nothing guarantees the rows come back sorted, and a zero price would drag
+  // an average toward a number no card ever sold at.
+  const t = trend(
+    pts(["2026-07-03", 30], ["2026-07-01", 10], ["2026-07-02", 20], ["2026-07-04", 0]),
+    15,
+  );
+  eq(t.days, 3, "non-positive prices are dropped, not averaged in");
+  eq(t.points[0].day, "2026-07-01", "points come back oldest first");
+  eq(t.average, 20, "average of 10/20/30");
+  eq(t.low, 10, "low");
+  eq(t.high, 30, "high");
+  eq(t.vsAverage, { abs: -5, pct: -25 }, "market 15 is 25% under the 20 average");
+  eq(t.change, { abs: 20, pct: 200 }, "change is measured oldest to newest");
+
+  // Today is compared against the past, never folded into it — otherwise the
+  // comparison drags itself toward zero difference and stops meaning anything.
+  eq(trend(pts(["2026-07-01", 10]), 10).days, 1, "a single day is still one day");
+  eq(trend(pts(["2026-07-01", 10]), 10).average, 10, "average of one day is that day");
+  eq(trend(pts(["2026-07-01", 10]), 10).change, null, "one day is a dot, not a change");
+
+  eq(trend(pts(["2026-07-01", 10], ["2026-07-02", 12]), null).vsAverage, null,
+    "no market price today -> no comparison, rather than a fake 0%");
+
+  /* sparkPath */
+  eq(sparkPath([], 60, 20), "", "no points -> no line");
+  eq(sparkPath(pts(["2026-07-01", 10]), 60, 20), "", "one point -> no line drawn");
+  ok(!sparkPath(pts(["2026-07-01", 10], ["2026-07-02", 20]), 60, 20).includes("NaN"),
+    "two points produce a real path");
+  {
+    // A flat series has zero range; scaling to it would divide by zero.
+    const flat = sparkPath(pts(["2026-07-01", 5], ["2026-07-02", 5]), 60, 20);
+    ok(!flat.includes("NaN"), "flat series does not divide by zero");
+    ok(flat.includes("10.0"), "flat series is drawn down the middle");
+  }
+
+  /* groupHistory */
+  {
+    const g = groupHistory([
+      { card_id: "sv3pt5-6", finish: "Holofoil",    day: "2026-07-01", market: 100, low: 90 },
+      { card_id: "sv3pt5-6", finish: "Reverse holo", day: "2026-07-01", market: null, low: 12 },
+      { card_id: "sv3pt5-6", finish: "Normal",      day: "2026-07-01", market: null, low: null },
+    ]);
+    eq(g.get(historyKey("sv3pt5-6", "Holofoil"))?.[0].price, 100, "market is preferred");
+    eq(g.get(historyKey("sv3pt5-6", "Reverse holo"))?.[0].price, 12, "falls back to low");
+    eq(g.get(historyKey("sv3pt5-6", "Normal")), undefined, "priceless day is not a point");
+    // The whole reason history is stored per finish: 100 and 12 must never be
+    // averaged into a number that describes neither printing.
+    ok(g.get(historyKey("sv3pt5-6", "Holofoil")) !== g.get(historyKey("sv3pt5-6", "Reverse holo")),
+      "finishes are kept apart");
+  }
 }
 
 /* ---------------- summary ---------------- */

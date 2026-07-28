@@ -27,6 +27,12 @@ import {
 } from "@/components/dashboard/ui";
 import { ceiling, sortKey, type WatchStatus } from "@/lib/watchlist";
 import type { PriceCard } from "@/lib/prices";
+import {
+  sparkPath,
+  MIN_POINTS_FOR_LINE,
+  WINDOW_DAYS,
+  type Trend,
+} from "@/lib/price-history";
 
 export type WatchRow = {
   id: string;
@@ -51,9 +57,16 @@ export type WatchRow = {
   stale: boolean;
   status: WatchStatus;
   drift: { abs: number; pct: number } | null;
+  trend: Trend;
   tcgUrl: string | null;
   pricedAt: string | null;
 };
+
+export type LastRun = {
+  finished_at: string;
+  status: string;
+  rows_written: number;
+} | null;
 
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
 
@@ -90,6 +103,146 @@ function StatusCell({ row }: { row: WatchRow }) {
   }
 }
 
+const SPARK_W = 68;
+const SPARK_H = 22;
+
+/**
+ * The recorded price line for one card and finish.
+ *
+ * Scaled to its own range, not to zero, so a $2 move on a $90 card is visible.
+ * That is the right call for a 68-pixel line whose only job is "which way, how
+ * steadily" — and it is exactly why the tooltip carries the real high and low,
+ * because the shape on its own would let you misread the size of a move.
+ */
+function Sparkline({ t }: { t: Trend }) {
+  const d = sparkPath(t.points, SPARK_W, SPARK_H);
+  if (!d) return null;
+
+  const rising = (t.change?.abs ?? 0) > 0;
+  return (
+    <svg
+      width={SPARK_W}
+      height={SPARK_H}
+      viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+      className={rising ? "text-dim" : "text-gain"}
+      aria-hidden="true"
+    >
+      <path
+        d={d}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Today's price against the last 30 recorded days.
+ *
+ * Every branch below says how many days it is speaking for. An "average" over
+ * three days and one over thirty are different claims, and a vendor about to
+ * pay money on the strength of one is owed the difference. Nothing here is
+ * filled in, smoothed or extrapolated.
+ */
+function TrendCell({ row }: { row: WatchRow }) {
+  const t = row.trend;
+
+  if (!row.active) return <span className="text-dim">—</span>;
+
+  if (t.days === 0)
+    return (
+      <span
+        className="text-xs text-dim"
+        title="No days recorded for this card and finish yet. The snapshot runs once a day; a card added today has its first point tomorrow."
+      >
+        Not recorded yet
+      </span>
+    );
+
+  if (t.days < MIN_POINTS_FOR_LINE)
+    return (
+      <span
+        className="text-xs text-dim"
+        title="One recorded day is a dot, not a trend. Drawing a line through it would imply a month of stability nobody measured."
+      >
+        1 day so far
+      </span>
+    );
+
+  const v = t.vsAverage;
+  return (
+    <div className="flex items-center gap-2">
+      <Sparkline t={t} />
+      <span
+        className="leading-tight"
+        title={`${t.days} recorded ${t.days === 1 ? "day" : "days"} · low ${money(
+          t.low,
+        )} · high ${money(t.high)} · average ${money(t.average)}`}
+      >
+        {v ? (
+          <span className={`num text-xs ${v.pct < 0 ? "text-gain" : "text-dim"}`}>
+            {pct(v.pct)} vs avg
+          </span>
+        ) : (
+          <span className="num text-xs text-dim">avg {money(t.average)}</span>
+        )}
+        <span className="block text-[11px] text-dim">
+          {t.days}d recorded
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * When the record was last brought up to date, said out loud.
+ *
+ * A snapshot job that quietly stops looks exactly like a market that stopped
+ * moving: a flat line. This is the sentence that tells the two apart, so it is
+ * not decoration and should not be removed to tidy the page up.
+ *
+ * The staleness check runs after mount on purpose. "How long ago" depends on
+ * the current clock, which differs between the server render and the browser,
+ * and a hydration mismatch on a warning label is a good way to lose the
+ * warning.
+ */
+function LastRunNote({ run }: { run: LastRun }) {
+  const [stale, setStale] = useState(false);
+
+  useEffect(() => {
+    if (!run?.finished_at) return;
+    const ageHours = (Date.now() - new Date(run.finished_at).getTime()) / 3_600_000;
+    // The job runs daily, so anything past ~36h has missed a turn.
+    setStale(ageHours > 36);
+  }, [run]);
+
+  if (!run?.finished_at)
+    return (
+      <span className="text-loss">
+        The daily record has not run yet, so no trends exist so far.
+      </span>
+    );
+
+  const when = new Date(run.finished_at).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return (
+    <span className={stale ? "text-loss" : undefined}>
+      Last recorded {when}
+      {stale
+        ? " — that is more than a day ago, so these lines are behind. The daily job may have stopped."
+        : "."}
+    </span>
+  );
+}
+
 function TargetCell({ row }: { row: WatchRow }) {
   if (row.target_kind === "price")
     return (
@@ -112,9 +265,11 @@ function TargetCell({ row }: { row: WatchRow }) {
 export default function WatchlistClient({
   rows,
   degraded,
+  lastRun,
 }: {
   rows: WatchRow[];
   degraded: boolean;
+  lastRun: LastRun;
 }) {
   const [modal, setModal] = useState<WatchRow | "new" | null>(null);
   const [showPaused, setShowPaused] = useState(true);
@@ -197,12 +352,13 @@ export default function WatchlistClient({
           ) : null}
 
           <div className="table-scroll mt-6 overflow-x-auto rounded-lg border border-line">
-            <table className="w-full min-w-[860px] text-sm">
+            <table className="w-full min-w-[1010px] text-sm">
               <thead>
                 <tr className="border-b border-line bg-card text-left font-mono text-[11px] uppercase tracking-wider text-dim">
                   <th className="px-4 py-2.5 font-bold">Card</th>
                   <th className="px-4 py-2.5 font-bold">Finish</th>
                   <th className="px-4 py-2.5 text-right font-bold">Market</th>
+                  <th className="px-4 py-2.5 font-bold">{WINDOW_DAYS}-day trend</th>
                   <th className="px-4 py-2.5 text-right font-bold">Your target</th>
                   <th className="px-4 py-2.5 font-bold">Where it stands</th>
                   <th className="px-4 py-2.5" />
@@ -235,6 +391,16 @@ export default function WatchlistClient({
             Market is the TCGplayer market price for the finish you picked,
             refreshed daily by the provider &mdash; not a live quote. Pokémon
             singles only; sealed product is not in the price database.
+          </p>
+
+          <p className="mt-1.5 text-xs text-dim">
+            The trend is built from prices we record once a day, per card and
+            per finish. It starts the day after you add a card and only ever
+            shows days actually recorded &mdash; nothing is estimated or filled
+            in, so a short history reads as a short history. &ldquo;vs
+            avg&rdquo; compares today against that average, which is the
+            steadier number to judge a deal by: today&rsquo;s market is exactly
+            what moves when a card is being dumped. <LastRunNote run={lastRun} />
           </p>
         </>
       )}
@@ -326,6 +492,10 @@ function Row({
             ) : null}
           </>
         )}
+      </td>
+
+      <td className="px-4 py-2.5">
+        <TrendCell row={row} />
       </td>
 
       <td className="px-4 py-2.5 text-right">
