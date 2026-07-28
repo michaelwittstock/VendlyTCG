@@ -31,7 +31,7 @@ export default function Shows() {
           Get the calendar when it drops
         </p>
         <div className="mt-4">
-          <EmailCapture cta="Notify me" />
+          <EmailCapture cta="Notify me" source="shows" />
         </div>
       </div>
     </div>

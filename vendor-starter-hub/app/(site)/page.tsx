@@ -96,7 +96,7 @@ export default function Home() {
               Waitlist members get the free inventory template first
             </p>
             <div className="mt-4">
-              <EmailCapture cta="Get early access" />
+              <EmailCapture cta="Get early access" source="home" />
             </div>
           </div>
         </div>

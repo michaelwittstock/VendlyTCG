@@ -89,7 +89,7 @@ export default function StartHere() {
           to the list first.
         </p>
         <div className="mt-4">
-          <EmailCapture cta="Send it to me" />
+          <EmailCapture cta="Send it to me" source="start-here" />
         </div>
       </div>
     </div>

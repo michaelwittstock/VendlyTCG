@@ -67,7 +67,7 @@ export default function Tools() {
           Get new tools first
         </p>
         <div className="mt-4">
-          <EmailCapture cta="Join the list" />
+          <EmailCapture cta="Join the list" source="tools" />
         </div>
       </div>
     </div>

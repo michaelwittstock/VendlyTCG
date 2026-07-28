@@ -496,7 +496,7 @@ export default function FirstVendorTable() {
           template, go out to the list first.
         </p>
         <div className="mt-4">
-          <EmailCapture cta="Send it to me" />
+          <EmailCapture cta="Send it to me" source="first-vendor-table" />
         </div>
       </div>
 

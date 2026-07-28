@@ -172,7 +172,7 @@ export default function InventoryTemplate() {
           Show-prep checklist and price label generator are next out.
         </p>
         <div className="mt-4">
-          <EmailCapture cta="Join the list" />
+          <EmailCapture cta="Join the list" source="inventory-template" />
         </div>
       </div>
 

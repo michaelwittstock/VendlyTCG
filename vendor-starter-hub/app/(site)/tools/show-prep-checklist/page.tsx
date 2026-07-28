@@ -152,7 +152,7 @@ export default function ShowPrepChecklist() {
           Get the next tool first
         </p>
         <div className="mt-4">
-          <EmailCapture cta="Join the list" />
+          <EmailCapture cta="Join the list" source="show-prep-checklist" />
         </div>
       </div>
 
