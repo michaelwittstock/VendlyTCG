@@ -41,13 +41,19 @@ export default function Tools() {
             Download →
           </p>
         </Link>
-        <div className="rounded-lg border border-line bg-card p-6">
-          <span className="sticker-muted">Coming</span>
+        <Link
+          href="/tools/show-prep-checklist"
+          className="group rounded-lg border border-line bg-card p-6 transition hover:-translate-y-1"
+        >
+          <span className="sticker">Live now</span>
           <h2 className="display mt-4 text-2xl">Show-prep checklist</h2>
           <p className="mt-3 text-sm text-dim">
             The printable list so you never forget the change float again.
           </p>
-        </div>
+          <p className="mt-4 font-mono text-xs font-bold uppercase tracking-wider group-hover:text-sticker">
+            Download →
+          </p>
+        </Link>
         <div className="rounded-lg border border-line bg-card p-6">
           <span className="sticker-muted">Coming</span>
           <h2 className="display mt-4 text-2xl">Price label generator</h2>

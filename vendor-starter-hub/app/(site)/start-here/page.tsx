@@ -43,6 +43,8 @@ const sections: {
   {
     title: "Show-day checklist",
     body: "Inventory + display gear, price stickers and pens, change float, card reader, phone battery pack, sleeves and toploaders for sales, water, and a plan for your first hour — restocks and repricing happen fast.",
+    href: "/tools/show-prep-checklist",
+    hrefLabel: "Print the checklist",
   },
 ];
 
@@ -80,11 +82,11 @@ export default function StartHere() {
       </div>
       <div className="mt-12 rounded-lg border border-line bg-card p-6">
         <p className="font-mono text-xs font-bold uppercase tracking-wider">
-          Get the show-prep checklist
+          Get the next tool first
         </p>
         <p className="mt-2 text-sm text-dim">
-          The inventory template is already free — the printable show-prep checklist goes out to
-          the list first.
+          The inventory template and the show-prep checklist are both free already. New tools go
+          to the list first.
         </p>
         <div className="mt-4">
           <EmailCapture cta="Send it to me" />
