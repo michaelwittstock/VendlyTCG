@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import EmailCapture from "@/components/email-capture";
 
 export const metadata: Metadata = {
@@ -44,8 +45,15 @@ export default function StartHere() {
       <span className="sticker">The playbook</span>
       <h1 className="chrome-text display mt-5 text-5xl sm:text-6xl">Your first vendor table</h1>
       <p className="mt-5 text-lg text-dim">
-        Everything you actually need to know before you set up — condensed. The full deep-dive
-        guide is in progress.
+        Everything you actually need to know before you set up — condensed. Want the long version?
+        Read the full{" "}
+        <Link
+          href="/guides/first-vendor-table"
+          className="text-sticker underline underline-offset-4"
+        >
+          first vendor table guide
+        </Link>
+        .
       </p>
       <div className="mt-10 space-y-8">
         {sections.map((s) => (
@@ -57,10 +65,10 @@ export default function StartHere() {
       </div>
       <div className="mt-12 rounded-lg border border-line bg-card p-6">
         <p className="font-mono text-xs font-bold uppercase tracking-wider">
-          Get the full guide first
+          Get the show-prep checklist
         </p>
         <p className="mt-2 text-sm text-dim">
-          The complete deep-dive ships to the list before it goes public.
+          The printable checklist and the free inventory template go out to the list first.
         </p>
         <div className="mt-4">
           <EmailCapture cta="Send it to me" />

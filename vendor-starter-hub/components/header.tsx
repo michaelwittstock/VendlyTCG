@@ -18,12 +18,20 @@ export default function Header() {
             </Link>
           ))}
         </nav>
-        <Link
-          href="/#waitlist"
-          className="rounded bg-ink px-3 py-2 font-mono text-xs font-bold uppercase tracking-wider text-onaccent transition hover:bg-sticker hover:text-onaccent"
-        >
-          Join the list
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link
+            href="/dashboard"
+            className="font-mono text-xs uppercase tracking-wider text-dim transition hover:text-ink"
+          >
+            Vendor login
+          </Link>
+          <Link
+            href="/#waitlist"
+            className="rounded bg-ink px-3 py-2 font-mono text-xs font-bold uppercase tracking-wider text-onaccent transition hover:bg-sticker hover:text-onaccent"
+          >
+            Join the list
+          </Link>
+        </div>
       </div>
     </header>
   );

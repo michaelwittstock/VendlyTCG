@@ -10,7 +10,7 @@ export default function Home() {
           Run your first table like it&apos;s your fiftieth.
         </h1>
         <p className="mt-6 max-w-xl text-lg text-dim">
-          Vendor Starter Hub is the playbook, the toolkit, and the SoCal show calendar for people
+          Vendly TCG is the playbook, the toolkit, and the SoCal show calendar for people
           selling trading cards — from first booth to full setup.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
@@ -36,14 +36,15 @@ export default function Home() {
         <h2 className="display text-3xl sm:text-4xl">What&apos;s on the table</h2>
         <div className="mt-8 grid gap-5 md:grid-cols-3">
           <Link
-            href="/start-here"
+            href="/guides/first-vendor-table"
             className="group rounded-lg border border-line bg-card p-6 transition hover:-translate-y-1"
           >
-            <span className="sticker-muted">Guides</span>
+            <span className="sticker">New guide</span>
             <h3 className="display mt-4 text-2xl">The playbook</h3>
             <p className="mt-3 text-sm text-dim">
-              Sourcing, pricing, booth setup, cash handling, and the tax basics nobody tells you
-              before your first show.
+              Break-even math, inventory mix, sourcing, pricing to comps, booth layout, payments,
+              and the California permit and sales-tax basics nobody tells you before your first
+              show.
             </p>
             <p className="mt-4 font-mono text-xs font-bold uppercase tracking-wider group-hover:text-sticker">
               Open →

@@ -1,5 +1,5 @@
 export const site = {
-  name: "Vendor Starter Hub",
+  name: "Vendly TCG",
   tagline: "Learn to vend. Tools to profit.",
   description:
     "Guides, tools, and a SoCal show calendar for new trading card vendors — from first table to full setup.",

@@ -15,6 +15,8 @@
   --color-sticker: #d9764f;
   --color-onaccent: #14110f;
   --color-chip: #2a2926;
+  --color-gain: #8fae7d;
+  --color-loss: #c65b52;
   --font-display: "Anton", "Arial Narrow", sans-serif;
   --font-sans: "Instrument Sans", system-ui, sans-serif;
   --font-mono: "Space Mono", ui-monospace, monospace;
@@ -43,6 +45,8 @@
     --color-sticker: #b8532c;
     --color-onaccent: #faf9f5;
     --color-chip: #eceae1;
+    --color-gain: #4e7a3a;
+    --color-loss: #a83a30;
     --chrome: linear-gradient(
       100deg,
       #3a3835 0%,
@@ -128,3 +132,16 @@ input:focus-visible {
     animation: none !important;
   }
 }
+
+/* Back office */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+.table-scroll::-webkit-scrollbar { height: 8px; }
+.table-scroll::-webkit-scrollbar-thumb { background: var(--color-line); border-radius: 4px; }
