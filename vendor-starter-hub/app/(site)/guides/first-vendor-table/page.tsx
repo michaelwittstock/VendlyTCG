@@ -278,7 +278,12 @@ export default function FirstVendorTable() {
       <P>
         Price against what cards actually sold for, not what people are asking. Asking prices are
         a wish list; sold listings are a market. If you only check one thing before a show, check
-        recent sold comps on your top twenty cards.
+        recent sold comps on your top twenty cards. The{" "}
+        <Link href="/tools/price-checker" className="text-sticker underline underline-offset-4">
+          price checker
+        </Link>{" "}
+        gives you market, low, and high on any Pokémon card, plus the most you can pay for one and
+        still keep your margin.
       </P>
       <P>
         Give every card two numbers: the sticker price and your floor. Decide the floor at home,

@@ -29,6 +29,20 @@ export default function Tools() {
           </p>
         </Link>
         <Link
+          href="/tools/price-checker"
+          className="group rounded-lg border border-line bg-card p-6 transition hover:-translate-y-1"
+        >
+          <span className="sticker">Live now</span>
+          <h2 className="display mt-4 text-2xl">Card price checker</h2>
+          <p className="mt-3 text-sm text-dim">
+            Market, low, and high on any Pokémon card — plus the most you can pay and still make
+            your margin.
+          </p>
+          <p className="mt-4 font-mono text-xs font-bold uppercase tracking-wider group-hover:text-sticker">
+            Open →
+          </p>
+        </Link>
+        <Link
           href="/tools/inventory-template"
           className="group rounded-lg border border-line bg-card p-6 transition hover:-translate-y-1"
         >

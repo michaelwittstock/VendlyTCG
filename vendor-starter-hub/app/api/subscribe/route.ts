@@ -15,6 +15,7 @@ const KNOWN_SOURCES = new Set([
   "tools",
   "inventory-template",
   "show-prep-checklist",
+  "price-checker",
   "first-vendor-table",
 ]);
 
