@@ -150,3 +150,66 @@ self.addEventListener("fetch", (event) => {
 
   if (isShowDoc) event.respondWith(docNetworkFirst(request));
 });
+
+/* ------------------------------------------------------------------ *
+ * Watchlist alerts (Web Push)
+ *
+ * Separate concern from Show mode caching above, sharing this file only
+ * because a page may register exactly one service worker per scope.
+ *
+ * userVisibleOnly was promised at subscribe time, so every push MUST show a
+ * notification. A push that decides it has nothing to say and shows nothing
+ * gets the whole subscription revoked by the browser after a few offences.
+ * Hence the fallback below: it should never be reached, and if it is, the
+ * honest thing is to say so rather than stay silent and lose the channel.
+ * ------------------------------------------------------------------ */
+
+const ALERT_TAG = "vendly-watchlist-digest";
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = {};
+  }
+
+  const title = payload.title || "Vendly TCG";
+  const body = payload.body || "Open your watchlist to see what changed.";
+  const url = payload.url || "/dashboard/watchlist";
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      // One tag for all digests: a new day's digest replaces yesterday's
+      // rather than stacking up unread on the lock screen.
+      tag: ALERT_TAG,
+      renotify: true,
+      data: { url },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/dashboard/watchlist";
+
+  event.waitUntil(
+    (async () => {
+      const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      // Reuse a tab that is already open on this origin instead of piling up
+      // windows — a vendor tapping a notification three days running should
+      // not end up with three copies of the dashboard.
+      for (const client of all) {
+        if (new URL(client.url).origin === self.location.origin) {
+          await client.focus();
+          if ("navigate" in client) await client.navigate(target);
+          return;
+        }
+      }
+      await self.clients.openWindow(target);
+    })(),
+  );
+});

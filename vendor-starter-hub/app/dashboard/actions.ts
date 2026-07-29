@@ -284,3 +284,97 @@ export async function setWatchActive(
   if (error) return { error: error.message };
   return done();
 }
+
+/* ---------------- alerts ---------------- */
+
+/**
+ * Store a device's push subscription.
+ *
+ * Upsert on endpoint, not insert. A browser hands back the SAME endpoint when
+ * you re-subscribe, and a person who signs out and back in on one device must
+ * end up with one row that belongs to whoever is signed in now — two rows
+ * would deliver one vendor's watchlist to another.
+ */
+export async function savePushSubscription(sub: {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string;
+}): Promise<ActionState> {
+  const { supabase, user } = await authed();
+  if (!user) return { error: "Not signed in." };
+
+  if (!sub?.endpoint || !sub.p256dh || !sub.auth) {
+    return { error: "That subscription is missing its keys." };
+  }
+  // These arrive from the browser, so they are input even though no human
+  // typed them. The DB has matching length checks as the backstop.
+  if (sub.endpoint.length > 1000 || sub.p256dh.length > 200 || sub.auth.length > 100) {
+    return { error: "That subscription does not look right." };
+  }
+
+  const { error } = await supabase.from("push_subscriptions").upsert(
+    {
+      user_id: user.id,
+      endpoint: sub.endpoint,
+      p256dh: sub.p256dh,
+      auth: sub.auth,
+      user_agent: sub.user_agent?.slice(0, 300) ?? null,
+      failure_count: 0,
+      last_error: null,
+    },
+    { onConflict: "endpoint" },
+  );
+  if (error) return { error: error.message };
+
+  // First time in, give them settings so the defaults are visible and editable
+  // rather than implicit. ignoreDuplicates: never stamp over choices they made.
+  await supabase
+    .from("alert_settings")
+    .upsert({ user_id: user.id }, { onConflict: "user_id", ignoreDuplicates: true });
+
+  return done();
+}
+
+export async function removePushSubscription(endpoint: string): Promise<ActionState> {
+  const { supabase, user } = await authed();
+  if (!user) return { error: "Not signed in." };
+  const { error } = await supabase
+    .from("push_subscriptions")
+    .delete()
+    .eq("endpoint", endpoint);
+  if (error) return { error: error.message };
+  return done();
+}
+
+export async function saveAlertSettings(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  const { supabase, user } = await authed();
+  if (!user) return { error: "Not signed in." };
+
+  const minPct = num(form.get("min_pct_under"), 15);
+  const minDays = Math.round(num(form.get("min_recorded_days"), 7));
+  const quiet = str(form.get("quiet_until"));
+
+  // Mirrors the DB check constraints so the form can say something useful
+  // before a round trip, the same way validateTarget does for watches.
+  if (minPct < 5 || minPct > 90)
+    return { error: "Pick a threshold between 5% and 90%." };
+  if (minDays < 3 || minDays > 30)
+    return { error: "Wait for between 3 and 30 recorded days." };
+
+  const { error } = await supabase.from("alert_settings").upsert(
+    {
+      user_id: user.id,
+      enabled: form.get("enabled") !== null,
+      min_pct_under: minPct,
+      min_recorded_days: minDays,
+      quiet_until: quiet,
+    },
+    { onConflict: "user_id" },
+  );
+  if (error) return { error: error.message };
+  return done();
+}

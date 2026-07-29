@@ -65,3 +65,62 @@ select net.http_post(
 A run that is not `ok` always carries its reason in `detail`. A `status` of
 `partial` means the day was recorded but not completely — capped, or an
 upstream batch failed after five attempts.
+
+## alert-digest
+
+Once a day, thirty minutes after the snapshot, tells each vendor which of the
+cards they are watching has fallen against **its own recent average**. One push
+notification per person per day, never one per card.
+
+Costs nothing upstream: it reads today's price out of `price_history`, which
+the snapshot job wrote half an hour earlier. Every number in every notification
+comes from one SQL function (`alert_candidates`).
+
+### What it is allowed to claim
+
+That a card's market price is below its own 30-day average. That is all. It has
+not seen a listing, a seller or an auction — that needs the eBay Browse API and
+is a separate, still-blocked roadmap row. The copy in `lib/alerts.ts` is written
+to be true without it, and a unit test asserts the wording never implies
+otherwise.
+
+### The rules that keep permission from being revoked
+
+The failure mode that kills a notification feature is not a missed deal, it is a
+pointless buzz — and on iOS a revoked permission cannot be re-prompted for.
+
+- **One digest a day**, at most three cards named, the rest counted.
+- **Seven-day cooldown per card**, broken only if it has fallen a further 5
+  points. A card 20% under today is usually still 20% under tomorrow.
+- **Minimum recorded days** (default 7) before a card can alert at all. "Under
+  its 30-day average" computed from two days is arithmetic on noise.
+- **Silence when there is nothing.** No daily "no deals today".
+
+Defaults live in `alert_settings` and are editable per person on the watchlist.
+
+### Web Push
+
+Encryption (RFC 8291) and VAPID (RFC 8292) are implemented directly on
+WebCrypto in `webpush.ts` rather than pulling `npm:web-push` into an edge
+runtime. `npm run test:push` verifies it by **decrypting** a message as a
+browser would and by verifying the JWT signature — a wrong byte here produces a
+notification that silently never arrives, with no error anywhere.
+
+The VAPID private key is in Vault (`vapid_private_jwk`); the public half is a
+constant in `lib/push.ts` and is public by design.
+
+**No manual step for this one.** Notifications work as soon as the watchlist UI
+ships with the branch merge.
+
+### Checking on it
+
+```sql
+select day, status, candidates, alerts_raised, people_notified,
+       pushes_sent, pushes_failed, subscriptions_retired, detail
+  from public.alert_runs order by started_at desc limit 14;
+```
+
+`candidates` greater than `alerts_raised` is normal — the difference is cards
+inside their cooldown. `alerts_raised` greater than `people_notified` means
+someone has no subscribed device, which is also normal: they see the alerts in
+the app.

@@ -13,6 +13,10 @@ import {
 import {
   trend, sparkPath, groupHistory, historyKey,
 } from "../lib/price-history";
+import {
+  shouldRaise, ceilingFor, insideCeiling, alertLine, digest,
+} from "../lib/alerts";
+import { readFileSync } from "node:fs";
 
 let pass = 0;
 const fails: string[] = [];
@@ -237,6 +241,74 @@ eq(referencePrice(null), null, "no finish -> no price");
     ok(g.get(historyKey("sv3pt5-6", "Holofoil")) !== g.get(historyKey("sv3pt5-6", "Reverse holo")),
       "finishes are kept apart");
   }
+}
+
+/* ---------------- alert rules ---------------- */
+{
+  const base = {
+    watch_id: "w1", card_id: "sv3pt5-6", card_name: "Charizard ex", finish: "Holofoil",
+    market: 80, average: 100, pct_under: 20, recorded_days: 14,
+    target_kind: "percent" as const, target_price: null, target_pct: 30,
+    last_alert_day: null as string | null, last_alert_pct: null as number | null,
+  };
+
+  eq(shouldRaise(base, "2026-07-28").reason, "first", "never alerted -> raise");
+
+  // The rule that decides whether people keep notifications turned on. A card
+  // 20% under today is usually still 20% under tomorrow; without this it is a
+  // buzz a day for the same non-news.
+  eq(shouldRaise({ ...base, last_alert_day: "2026-07-27", last_alert_pct: 20 }, "2026-07-28"),
+    { raise: false, reason: "in_cooldown" }, "same news the next day stays quiet");
+  eq(shouldRaise({ ...base, last_alert_day: "2026-07-26", last_alert_pct: 20, pct_under: 24 }, "2026-07-28").raise,
+    false, "4 points deeper is not enough to break the cooldown");
+  eq(shouldRaise({ ...base, last_alert_day: "2026-07-26", last_alert_pct: 20, pct_under: 25 }, "2026-07-28"),
+    { raise: true, reason: "deeper" }, "5 points deeper is genuinely new and speaks");
+  eq(shouldRaise({ ...base, last_alert_day: "2026-07-21", last_alert_pct: 20 }, "2026-07-28"),
+    { raise: true, reason: "cooldown_expired" }, "7 days later it may speak again");
+  eq(shouldRaise({ ...base, last_alert_day: "2026-07-22", last_alert_pct: 20 }, "2026-07-28").raise,
+    false, "6 days is still inside the cooldown");
+
+  /* ceilings */
+  eq(ceilingFor(base), 56, "30% under an $80 market is a $56 ceiling");
+  eq(insideCeiling(base), false, "$80 market is not inside its own $56 ceiling");
+  eq(ceilingFor({ ...base, target_kind: "price", target_price: 90, target_pct: null }), 90,
+    "a fixed ceiling is the fixed number");
+  eq(insideCeiling({ ...base, target_kind: "price", target_price: 90, target_pct: null }), true,
+    "$80 is inside a $90 fixed ceiling");
+
+  /* copy — the claim it makes is the whole product risk */
+  const line = alertLine(base);
+  ok(line.includes("under its 14-day average"), "says what it compared against");
+  ok(!/listing|for sale|seller|auction/i.test(line),
+    "never implies it saw a listing (it cannot — that needs eBay)");
+
+  /* digest */
+  eq(digest([]), null, "nothing to say -> send nothing, not 'no deals today'");
+  {
+    const many = Array.from({ length: 6 }, (_, i) => ({
+      ...base, watch_id: `w${i}`, card_name: `Card ${i}`, pct_under: 20 + i,
+    }));
+    const d = digest(many)!;
+    ok(d.title.startsWith("6 cards"), "title counts every card, not just shown ones");
+    eq(d.body.split("\n").length, 4, "three lines plus an 'and N more'");
+    ok(d.body.includes("Card 5"), "deepest discount is listed first");
+    ok(d.body.includes("and 3 more"), "the remainder is acknowledged, not dropped");
+  }
+  eq(digest([base])!.title, "1 card is down against its own history", "singular reads correctly");
+}
+
+/* ---------------- the Edge Function's copy of lib/alerts.ts ---------------- *
+ * The alert rules run in two places: the Next app (types, and these tests) and
+ * a Deno Edge Function, which cannot import from lib/. The function ships a
+ * copy. This is the guard that stops the two drifting, which would show up as
+ * notifications that disagree with the screen. */
+{
+  const a = readFileSync(new URL("../lib/alerts.ts", import.meta.url), "utf8");
+  const b = readFileSync(
+    new URL("../supabase/functions/alert-digest/alerts.ts", import.meta.url), "utf8");
+  ok(a === b,
+    "supabase/functions/alert-digest/alerts.ts is out of sync with lib/alerts.ts\n" +
+    "      fix: cp lib/alerts.ts supabase/functions/alert-digest/alerts.ts (and redeploy)");
 }
 
 /* ---------------- summary ---------------- */

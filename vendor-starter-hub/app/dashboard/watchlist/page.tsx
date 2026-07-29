@@ -8,6 +8,7 @@ import {
   WINDOW_DAYS,
 } from "@/lib/price-history";
 import WatchlistClient, { type WatchRow } from "./watchlist-client";
+import AlertsPanel, { type AlertSettings } from "./alerts-panel";
 
 export const metadata = { title: "Watchlist" };
 // Prices are looked up per request (behind a 6h cache in lib/prices), so this
@@ -62,6 +63,32 @@ export default async function WatchlistPage() {
       supabase.rpc("price_history_last_run").maybeSingle(),
     ]);
 
+  // Alerts. All three are RLS-scoped to the signed-in user, so no filter is
+  // needed here and adding one would only imply the policy is not the boundary.
+  const [settingsRes, subsRes, alertCountRes] = await Promise.all([
+    supabase
+      .from("alert_settings")
+      .select("enabled, min_pct_under, min_recorded_days, quiet_until")
+      .maybeSingle(),
+    supabase.from("push_subscriptions").select("id", { count: "exact", head: true }),
+    supabase
+      .from("alerts")
+      .select("id", { count: "exact", head: true })
+      .gte("day", pacificDay(-30)),
+  ]);
+
+  // A user who has never opened the settings has no row. Falling back to the
+  // table's own defaults keeps the form honest about what will actually happen
+  // rather than showing empty fields that imply nothing is configured.
+  const alertSettings: AlertSettings = settingsRes.data
+    ? {
+        enabled: settingsRes.data.enabled,
+        min_pct_under: Number(settingsRes.data.min_pct_under),
+        min_recorded_days: settingsRes.data.min_recorded_days,
+        quiet_until: settingsRes.data.quiet_until,
+      }
+    : { enabled: true, min_pct_under: 15, min_recorded_days: 7, quiet_until: null };
+
   const history = groupHistory(historyRes.data ?? []);
 
   const rows: WatchRow[] = watches.map((w) => {
@@ -115,5 +142,14 @@ export default async function WatchlistPage() {
     | { finished_at: string; status: string; rows_written: number }
     | null;
 
-  return <WatchlistClient rows={rows} degraded={degraded} lastRun={lastRun} />;
+  return (
+    <>
+      <WatchlistClient rows={rows} degraded={degraded} lastRun={lastRun} />
+      <AlertsPanel
+        settings={alertSettings}
+        subscribed={(subsRes.count ?? 0) > 0}
+        recentCount={alertCountRes.count ?? 0}
+      />
+    </>
+  );
 }
