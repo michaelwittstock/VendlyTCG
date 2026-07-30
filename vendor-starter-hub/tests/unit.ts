@@ -16,6 +16,10 @@ import {
 import {
   shouldRaise, ceilingFor, insideCeiling, alertLine, digest,
 } from "../lib/alerts";
+import {
+  draftOffer, cleanOffer, canCite, cardLabel, showDay,
+  MIN_DAYS_TO_CITE, MAX_LEN, type DraftInput,
+} from "../lib/negotiate";
 import { readFileSync } from "node:fs";
 
 let pass = 0;
@@ -295,6 +299,148 @@ eq(referencePrice(null), null, "no finish -> no price");
     ok(d.body.includes("and 3 more"), "the remainder is acknowledged, not dropped");
   }
   eq(digest([base])!.title, "1 card is down against its own history", "singular reads correctly");
+}
+
+/* ---------------- negotiation drafts ---------------- *
+ * The two things that must never break: the offer cannot exceed the number
+ * the user set, and the text cannot claim to have seen a listing. */
+{
+  const base: Omit<DraftInput, "channel"> = {
+    cardName: "Umbreon VMAX",
+    setName: "Evolving Skies",
+    cardNumber: "215",
+    finishLabel: "Holofoil",
+    market: 74,
+    average: 92,
+    recordedDays: 26,
+    ceiling: 73.6,
+    show: null,
+  };
+  const draft = (o: Partial<DraftInput> = {}) =>
+    draftOffer({ ...base, channel: "in_person", ...o });
+
+  /* cleanOffer — always down, never up */
+  eq(cleanOffer(73.6), 70, "$73.60 rounds down to $70 (step 5)");
+  eq(cleanOffer(19.99), 19, "under $20 steps by a dollar");
+  eq(cleanOffer(335.21), 330, "over $200 steps by ten");
+  eq(cleanOffer(200), 200, "a number already on the step is left alone");
+  eq(cleanOffer(0.8), 0.8, "a sub-dollar figure is kept rather than floored to nothing");
+  eq(cleanOffer(0), 0, "zero is not an offer");
+  ok([1, 5, 10, 20, 73.6, 99.99, 1234.5].every((n) => cleanOffer(n) <= n),
+    "cleanOffer never rounds up, at any magnitude");
+
+  /* the ceiling is a hard stop */
+  {
+    const d = draft();
+    ok(d.ok && d.offer <= base.ceiling!, "offer never exceeds the user's ceiling");
+    eq(d.ok && d.offer, 70, "offers the clean number under the ceiling");
+    eq(d.ok && d.headroom, 3.6, "reports the room left before the ceiling");
+  }
+  {
+    // Ceiling above market: you would never open above what the card costs.
+    const d = draft({ ceiling: 500, market: 74 });
+    ok(d.ok && d.offer <= 74, "a generous ceiling is still capped by today's market");
+    // Headroom has to be measured against the limit that actually bound the
+    // offer. Against the ceiling this would read $430 of "room" on a $74 card,
+    // which is not a rounding quibble — it is advice to overpay sixfold.
+    eq(d.ok && d.headroom, 4, "headroom is room up to market, not up to the ceiling");
+    eq(d.ok && d.boundBy, "market", "and it says which limit bound it");
+    eq(draft().ok && (draft() as { boundBy: string }).boundBy, "ceiling",
+      "the usual case is still bound by the ceiling");
+  }
+
+  /* the opening line has to read like a person wrote it */
+  {
+    const d = draft();
+    ok(d.ok && !/\ba (?=[aeiouAEIOU])/.test(d.text),
+      "no 'a Umbreon' — article agreement is the first thing that gives a bot away");
+  }
+
+  /* blocked cases say why rather than emitting a bad message */
+  eq(draft({ market: null }), { ok: false, reason: "no_market" }, "no market -> no draft");
+  eq(draft({ ceiling: null }), { ok: false, reason: "no_ceiling" }, "no ceiling -> no draft");
+  eq(draft({ ceiling: 0, market: 5 }), { ok: false, reason: "too_small" },
+    "a zero ceiling is not an offer");
+
+  /* what the text is allowed to claim */
+  {
+    const d = draft();
+    ok(d.ok && !/listing|for sale|seller|auction|ebay/i.test(d.text),
+      "never implies it saw a listing (it cannot — that needs eBay)");
+    ok(d.ok && d.text.includes("$70"), "the offer appears in the message");
+    ok(d.ok && d.text.includes("Umbreon VMAX"), "names the card");
+    ok(d.ok && d.text.includes("Holofoil"), "pins the finish — holo and reverse are different money");
+    ok(d.ok && d.text.length <= MAX_LEN, "stays inside the length cap");
+  }
+
+  /* the evidence rule */
+  ok(canCite({ ...base, channel: "online" }), "26 days below average is citable");
+  ok(!canCite({ ...base, channel: "online", recordedDays: MIN_DAYS_TO_CITE - 1 }),
+    "a short history is not citable");
+  ok(!canCite({ ...base, channel: "online", market: 99 }),
+    "above the average is not citable — that argues the other side's case");
+  ok(!canCite({ ...base, channel: "online", average: null }),
+    "no recorded average, nothing to cite");
+  {
+    const cited = draft();
+    ok(cited.ok && cited.cited && cited.text.includes("26 recorded days"),
+      "cites the average and says how many days are behind it");
+    const bare = draft({ recordedDays: 2 });
+    ok(bare.ok && !bare.cited && !/averag/i.test(bare.text),
+      "a two-day history produces no claim at all, not a hedged one");
+    const above = draft({ market: 99, ceiling: 95 });
+    ok(above.ok && !above.cited && !/averag/i.test(above.text),
+      "does not quote an average today's price is above");
+  }
+
+  /* show context is optional and never invented */
+  {
+    const withShow = draftOffer({
+      ...base, channel: "online", show: { name: "Ontario Card Show", date: "2026-08-08" },
+    });
+    ok(withShow.ok && withShow.text.includes("Ontario Card Show"), "mentions a real show");
+    ok(withShow.ok && withShow.text.includes("Saturday"), "names the day, from the date");
+    const noDate = draftOffer({
+      ...base, channel: "online", show: { name: "Ontario Card Show", date: null },
+    });
+    ok(noDate.ok && noDate.text.includes("Ontario Card Show") && !/undefined|null|Invalid/.test(noDate.text),
+      "a show with no date drops the day rather than printing a guess");
+    ok(draft({ show: null }).ok && !/vending/i.test((draft({ show: null }) as { text: string }).text),
+      "no show on the books, no show sentence");
+  }
+
+  /* date handling must not slide a day backwards across a timezone */
+  eq(showDay("2026-08-08"), "Saturday, Aug 8", "date-only string keeps its day");
+  eq(showDay(null), null, "no date, no day");
+  eq(showDay("not a date"), null, "junk in, nothing out");
+
+  /* labelling */
+  eq(cardLabel({ ...base, channel: "online" }),
+    "Umbreon VMAX (Evolving Skies #215, Holofoil)", "full label when everything is known");
+  eq(cardLabel({ ...base, channel: "online", setName: null, cardNumber: null, finishLabel: null }),
+    "Umbreon VMAX", "bare name when nothing else is");
+
+  /* the ceiling holds across the whole range, not just the one example above */
+  for (const ceiling of [1, 2.5, 9.99, 19.99, 20, 73.6, 199, 200, 335.21, 1234.5]) {
+    const d = draft({ ceiling, market: 100000 });
+    ok(d.ok && d.offer <= ceiling, `offer stays under a $${ceiling} ceiling`);
+    ok(d.ok && d.headroom >= 0, `headroom is never negative at $${ceiling}`);
+  }
+}
+
+/* ---------------- drafts cannot send ---------------- *
+ * The composer and its panel both promise, in their own doc comments, that the
+ * only exit is the clipboard. A promise in a comment is worth nothing once
+ * someone adds a convenience "send" later, so this asserts it against the
+ * source instead. If this test fails, the feature has changed category — from
+ * a drafting tool into a bot messaging strangers about money in the user's
+ * name — and that is a decision to make on purpose, not in a refactor. */
+{
+  const send = /\bfetch\s*\(|XMLHttpRequest|sendBeacon|EventSource|WebSocket|mailto:|window\.open|location\s*=/;
+  for (const f of ["../lib/negotiate.ts", "../app/dashboard/watchlist/draft-message.tsx"]) {
+    const src = readFileSync(new URL(f, import.meta.url), "utf8");
+    ok(!send.test(src), `${f} has no way to transmit anything`);
+  }
 }
 
 /* ---------------- the Edge Function's copy of lib/alerts.ts ---------------- *

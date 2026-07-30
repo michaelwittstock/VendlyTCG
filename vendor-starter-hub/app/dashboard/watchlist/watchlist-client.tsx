@@ -33,6 +33,7 @@ import {
   WINDOW_DAYS,
   type Trend,
 } from "@/lib/price-history";
+import DraftMessage, { type NextShow } from "./draft-message";
 
 export type WatchRow = {
   id: string;
@@ -266,12 +267,15 @@ export default function WatchlistClient({
   rows,
   degraded,
   lastRun,
+  nextShow,
 }: {
   rows: WatchRow[];
   degraded: boolean;
   lastRun: LastRun;
+  nextShow: NextShow;
 }) {
   const [modal, setModal] = useState<WatchRow | "new" | null>(null);
+  const [draftRow, setDraftRow] = useState<WatchRow | null>(null);
   const [showPaused, setShowPaused] = useState(true);
   const [, startTransition] = useTransition();
 
@@ -352,7 +356,7 @@ export default function WatchlistClient({
           ) : null}
 
           <div className="table-scroll mt-6 overflow-x-auto rounded-lg border border-line">
-            <table className="w-full min-w-[1010px] text-sm">
+            <table className="w-full min-w-[1080px] text-sm">
               <thead>
                 <tr className="border-b border-line bg-card text-left font-mono text-[11px] uppercase tracking-wider text-dim">
                   <th className="px-4 py-2.5 font-bold">Card</th>
@@ -369,6 +373,7 @@ export default function WatchlistClient({
                   <Row
                     key={r.id}
                     row={r}
+                    onDraft={() => setDraftRow(r)}
                     onEdit={() => setModal(r)}
                     onToggle={() =>
                       startTransition(() => {
@@ -416,17 +421,48 @@ export default function WatchlistClient({
           />
         </Modal>
       )}
+
+      {draftRow !== null && (
+        <Modal title="Draft an offer" onClose={() => setDraftRow(null)}>
+          <DraftMessage
+            input={{
+              cardName: draftRow.card_name,
+              setName: draftRow.set_name,
+              cardNumber: draftRow.card_number,
+              finishLabel: draftRow.finish ?? draftRow.finishLabel,
+              market: draftRow.market,
+              average: draftRow.trend.average,
+              recordedDays: draftRow.trend.days,
+              ceiling: ceiling(draftRow, draftRow.market),
+              show: nextShow,
+            }}
+            ceilingLabel={ceilingLabel(draftRow)}
+          />
+        </Modal>
+      )}
     </div>
   );
 }
 
+/** Shows the panel's working, so the offer is never a number out of nowhere. */
+function ceilingLabel(row: WatchRow): string {
+  if (row.target_kind === "price")
+    return `your fixed ceiling on this card is ${money(row.target_price)}`;
+  const c = ceiling(row, row.market);
+  return c === null
+    ? `${row.target_pct}% under market, which has no dollar figure today`
+    : `${row.target_pct}% under today's market of ${money(row.market)} is ${money(c)}`;
+}
+
 function Row({
   row,
+  onDraft,
   onEdit,
   onToggle,
   onDelete,
 }: {
   row: WatchRow;
+  onDraft: () => void;
   onEdit: () => void;
   onToggle: () => void;
   onDelete: () => void;
@@ -516,6 +552,18 @@ function Row({
           >
             Listings
           </a>
+        ) : null}
+        {/* Only offered when there is a price to build an offer around. A
+            button that opens a panel saying "there is no number" is a button
+            that teaches people not to press it. */}
+        {row.active && row.market !== null ? (
+          <button
+            onClick={onDraft}
+            className="ml-3 font-mono text-xs font-bold uppercase tracking-wider text-dim transition hover:text-ink"
+            title="Write an offer message for this card. Copies to your clipboard — nothing is sent."
+          >
+            Draft
+          </button>
         ) : null}
         <button
           onClick={onToggle}

@@ -63,9 +63,9 @@ export default async function WatchlistPage() {
       supabase.rpc("price_history_last_run").maybeSingle(),
     ]);
 
-  // Alerts. All three are RLS-scoped to the signed-in user, so no filter is
+  // Alerts. All four are RLS-scoped to the signed-in user, so no filter is
   // needed here and adding one would only imply the policy is not the boundary.
-  const [settingsRes, subsRes, alertCountRes] = await Promise.all([
+  const [settingsRes, subsRes, alertCountRes, nextShowRes] = await Promise.all([
     supabase
       .from("alert_settings")
       .select("enabled, min_pct_under, min_recorded_days, quiet_until")
@@ -75,6 +75,17 @@ export default async function WatchlistPage() {
       .from("alerts")
       .select("id", { count: "exact", head: true })
       .gte("day", pacificDay(-30)),
+
+    // The vendor's next show, if they have one on the books. Used only as
+    // optional context in a drafted offer ("I'm vending X on Saturday"), so a
+    // missing row simply drops the sentence rather than inventing a venue.
+    supabase
+      .from("shows")
+      .select("name, show_date")
+      .gte("show_date", pacificDay())
+      .order("show_date", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   // A user who has never opened the settings has no row. Falling back to the
@@ -142,9 +153,18 @@ export default async function WatchlistPage() {
     | { finished_at: string; status: string; rows_written: number }
     | null;
 
+  const nextShow = nextShowRes.data
+    ? { name: nextShowRes.data.name as string, date: nextShowRes.data.show_date as string | null }
+    : null;
+
   return (
     <>
-      <WatchlistClient rows={rows} degraded={degraded} lastRun={lastRun} />
+      <WatchlistClient
+        rows={rows}
+        degraded={degraded}
+        lastRun={lastRun}
+        nextShow={nextShow}
+      />
       <AlertsPanel
         settings={alertSettings}
         subscribed={(subsRes.count ?? 0) > 0}
